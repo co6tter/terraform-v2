@@ -120,8 +120,83 @@ resource "aws_s3_bucket_ownership_controls" "this" {
   }
 }
 
-output "bucket_name" {
-  value       = aws_s3_bucket.this.bucket
-  description = "作成されたS3バケット名 (ランダムsuffix付)"
+# Origin Access Control
+resource "aws_cloudfront_origin_access_control" "this" {
+  name                              = "${var.bucket_name_prefix}-oac"
+  description                       = "OAC for ${aws_s3_bucket.this.bucket}"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
+locals {
+  cf_origin_id = "s3-origin-${var.bucket_name_prefix}"
+}
+
+resource "aws_cloudfront_distribution" "this" {
+  enabled             = true
+  comment             = "C2 learn S3+CF"
+  default_root_object = "index.html"
+
+  origin {
+    domain_name              = aws_s3_bucket.this.bucket_regional_domain_name
+    origin_id                = local.cf_origin_id
+    origin_access_control_id = aws_cloudfront_origin_access_control.this.id
+  }
+
+  default_cache_behavior {
+    target_origin_id       = local.cf_origin_id
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+
+    # クエリもCookieも転送しない (静的コンテンツ向け)
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
+  # 最も安価（北米・ヨーロッパのみ）
+  # price_class = "PriceClass_100"
+  # 中間価格（北米・ヨーロッパ・アジア・オセアニア）
+  # price_class = "PriceClass_200"
+  # 最も高価（全世界のエッジロケーション）
+  # price_class = "PriceClass_All"
+  price_class = "PriceClass_100"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+data "aws_iam_policy_document" "allow_cf" {
+  statement {
+    sid = "AllowCloudFrontServicePrincipalReadOnly"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.this.arn}/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.this.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "this_cf" {
+  bucket = aws_s3_bucket.this.id
+  policy = data.aws_iam_policy_document.allow_cf.json
+}
