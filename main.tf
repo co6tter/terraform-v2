@@ -16,6 +16,11 @@ provider "aws" {
   region = var.region
 }
 
+provider "aws" {
+  alias  = "use1"
+  region = "us-east-1"
+}
+
 # 一意なバケット名を自動生成
 resource "random_string" "suffix" {
   length  = 6
@@ -127,6 +132,7 @@ resource "aws_cloudfront_origin_access_control" "this" {
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
+
 }
 
 locals {
@@ -173,9 +179,21 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
+  # カスタムドメイン名（独自ドメイン）では使用できない
+  # カスタムドメインを使用したい場合は、代わりにACM証明書やIAM証明書を設定する必要がある
+  # viewer_certificate {
+  #   cloudfront_default_certificate = true
+  # }
+
+  aliases = [var.domain_name]
+
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate.cert.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
+
+  depends_on = [aws_acm_certificate_validation.cert]
 }
 
 data "aws_iam_policy_document" "allow_cf" {
@@ -199,4 +217,60 @@ data "aws_iam_policy_document" "allow_cf" {
 resource "aws_s3_bucket_policy" "this_cf" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.allow_cf.json
+}
+
+locals {
+  root_domain = trim(var.zone_name, ".")
+}
+
+resource "aws_acm_certificate" "cert" {
+  provider          = aws.use1
+  domain_name       = "*.${local.root_domain}"
+  validation_method = "DNS"
+
+  subject_alternative_names = [local.root_domain]
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.cert.domain_validation_options :
+    dvo.domain_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }
+  }
+
+  zone_id         = data.aws_route53_zone.root.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.value]
+  ttl             = 300
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "cert" {
+  provider                = aws.use1
+  certificate_arn         = aws_acm_certificate.cert.arn
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+}
+
+data "aws_route53_zone" "root" {
+  name         = var.zone_name # 例: example.com.
+  private_zone = false
+}
+
+resource "aws_route53_record" "cf_alias" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.this.domain_name
+    zone_id                = "Z2FDTNDATAQYW2" # CloudFront 固定 Hosted Zone ID
+    evaluate_target_health = false
+  }
 }
