@@ -139,6 +139,10 @@ locals {
   cf_origin_id = "s3-origin-${var.bucket_name_prefix}"
 }
 
+data "aws_cloudfront_cache_policy" "optimized" {
+  name = "Managed-CachingOptimized"
+}
+
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   comment             = "C2 learn S3+CF"
@@ -156,13 +160,17 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
 
+    # マネージドポリシー
+    cache_policy_id = data.aws_cloudfront_cache_policy.optimized.id
+
+    # 旧式スタイル
     # クエリもCookieも転送しない (静的コンテンツ向け)
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
+    # forwarded_values {
+    #   query_string = false
+    #   cookies {
+    #     forward = "none"
+    #   }
+    # }
   }
 
   # 最も安価（北米・ヨーロッパのみ）
@@ -194,6 +202,37 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   depends_on = [aws_acm_certificate_validation.cert]
+
+  # 403 → error.html (200) を 60 秒キャッシュ
+  custom_error_response {
+    error_code            = 403
+    response_page_path    = "/error.html"
+    response_code         = 200
+    error_caching_min_ttl = 60
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_page_path    = "/error.html"
+    response_code         = 404
+    error_caching_min_ttl = 300
+  }
+
+  # 404 → SPA フォールバック (200) を 30 秒キャッシュ
+  # custom_error_response {
+  #   error_code            = 404
+  #   response_page_path    = "/index.html"
+  #   response_code         = 200
+  #   error_caching_min_ttl = 30
+  # }
+
+  # 500 → error.html (500) を 120 秒キャッシュ
+  custom_error_response {
+    error_code            = 500
+    response_page_path    = "/error.html"
+    response_code         = 500
+    error_caching_min_ttl = 120
+  }
 }
 
 data "aws_iam_policy_document" "allow_cf" {
