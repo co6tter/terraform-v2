@@ -1,0 +1,20 @@
+function handler(event) {
+  var req     = event.request;
+  var headers = req.headers;
+
+  var valid = "${TOKEN}";
+
+  var auth = headers.authorization && headers.authorization.value;
+
+  if (auth && auth.startsWith("Basic ") && auth.slice(6) === valid) {
+    return req;
+  }
+
+  return {
+    statusCode: 401,
+    statusDescription: "Unauthorized",
+    headers: {
+      "www-authenticate": { value: 'Basic realm="Protected"' }
+    }
+  };
+}
