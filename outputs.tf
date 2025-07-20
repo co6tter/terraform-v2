@@ -12,3 +12,8 @@ output "cloudfront_distribution_id" {
   value       = aws_cloudfront_distribution.this.id
   description = "CloudFront Distribution ID"
 }
+
+output "deploy_role_arn" {
+  description = "IAM role ARN assumed by GitHub Actions"
+  value       = aws_iam_role.github_deploy.arn
+}
