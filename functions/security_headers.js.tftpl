@@ -11,6 +11,7 @@ function handler(event) {
   h["content-security-policy"] = {
     value: [
       "default-src 'self'",
+      "script-src 'self'",
       "font-src 'self' data:",
       "img-src  'self' data:",
       "object-src 'none'",
