@@ -15,25 +15,22 @@ resource "aws_cloudfront_function" "security_headers" {
   name    = "${var.bucket_name_prefix}-sec-headers"
   runtime = "cloudfront-js-1.0"
   publish = true
-  code    = <<-EOT
-    function handler(event) {
-      var r = event.response;
-      var h = r.headers;
-      h["strict-transport-security"] = { value: "max-age=31536000; includeSubDomains; preload" };
-      h["content-security-policy"] = {
-        value: [
-          "default-src 'self'",
-          "font-src   'self' data:",
-          "img-src    'self' data:",
-          "object-src 'none'",
-          "frame-ancestors 'none'"
-        ].join("; ")
-      };
-      h["x-content-type-options"]    = { value: "nosniff" };
-      h["referrer-policy"]           = { value: "strict-origin-when-cross-origin" };
-      return r;
-    }
-  EOT
+
+  code = templatefile(
+    "${path.module}/functions/security_headers.js.tftpl",
+    {} # 置換パラメータなし
+  )
+}
+
+resource "aws_cloudfront_function" "basic_auth" {
+  name    = "${var.bucket_name_prefix}-basic-auth"
+  runtime = "cloudfront-js-1.0"
+  publish = true
+
+  code = templatefile(
+    "${path.module}/functions/basic_auth.js.tftpl",
+    { TOKEN = local.basic_auth_token }
+  )
 }
 
 resource "aws_cloudfront_distribution" "this" {
@@ -60,6 +57,12 @@ resource "aws_cloudfront_distribution" "this" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.basic_auth.arn
+    }
+
     function_association {
       event_type   = "viewer-response"
       function_arn = aws_cloudfront_function.security_headers.arn
@@ -139,3 +142,4 @@ resource "aws_cloudfront_distribution" "this" {
     error_caching_min_ttl = 120
   }
 }
+
