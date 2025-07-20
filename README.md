@@ -12,6 +12,14 @@ terraform init -migrate-state
 terraform plan
 ```
 
+## Destroy
+```bash
+terraform state rm aws_s3_bucket.tfstate
+terraform destroy -auto-approve
+# 復帰
+terraform import aws_s3_bucket.tfstate c2-terraform-state-prod
+```
+
 ## Note
 
-- sample
+importするときはIDやNameなどリソースによって必要な識別子が異なる。

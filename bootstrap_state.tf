@@ -1,6 +1,9 @@
 resource "aws_s3_bucket" "tfstate" {
   bucket = "c2-terraform-state-prod"
-  tags   = { Purpose = "terraform-state" }
+  lifecycle {
+    prevent_destroy = true
+  }
+  tags = { Purpose = "terraform-state" }
 }
 
 resource "aws_s3_bucket_public_access_block" "tfstate" {
