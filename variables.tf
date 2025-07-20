@@ -22,3 +22,9 @@ variable "domain_name" {
   type        = string
   default     = "cdn.example.com"
 }
+
+variable "repo" {
+  description = "GitHub Repository"
+  type        = string
+  default     = "owner/repo"
+}
