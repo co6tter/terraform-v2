@@ -9,4 +9,5 @@ locals {
   bucket_name_effective = "${var.bucket_name_prefix}-${random_string.suffix.result}"
   root_domain           = trim(var.zone_name, ".")
   cf_origin_id          = "s3-origin-${var.bucket_name_prefix}"
+  basic_auth_token      = base64encode("${var.basic_auth_username}:${var.basic_auth_password}")
 }
