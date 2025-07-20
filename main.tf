@@ -168,6 +168,10 @@ resource "aws_cloudfront_distribution" "this" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
+    function_association {
+      event_type   = "viewer-response"
+      function_arn = aws_cloudfront_function.security_headers.arn
+    }
 
     # マネージドポリシー
     cache_policy_id = data.aws_cloudfront_cache_policy.optimized.id
@@ -370,3 +374,19 @@ resource "aws_s3_bucket_policy" "cf_logs" {
   policy = data.aws_iam_policy_document.cf_log_write.json
 }
 
+resource "aws_cloudfront_function" "security_headers" {
+  name    = "${var.bucket_name_prefix}-sec-headers"
+  runtime = "cloudfront-js-1.0"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var r = event.response;
+      var h = r.headers;
+      h["strict-transport-security"] = { value: "max-age=31536000; includeSubDomains; preload" };
+      h["content-security-policy"]   = { value: "default-src 'self'" };
+      h["x-content-type-options"]    = { value: "nosniff" };
+      h["referrer-policy"]           = { value: "strict-origin-when-cross-origin" };
+      return r;
+    }
+  EOT
+}
