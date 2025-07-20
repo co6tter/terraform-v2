@@ -116,11 +116,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "tiering" {
   }
 }
 
-# 他のアカウントからアップロードされたオブジェクトも完全制御
-# 意図しないACL設定を防止
+
 resource "aws_s3_bucket_ownership_controls" "this" {
   bucket = aws_s3_bucket.this.id
   rule {
+    # 他のアカウントからアップロードされたオブジェクトも完全制御
+    # 意図しないACL設定を防止
     object_ownership = "BucketOwnerEnforced"
   }
 }
@@ -153,6 +154,14 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id                = local.cf_origin_id
     origin_access_control_id = aws_cloudfront_origin_access_control.this.id
   }
+
+  logging_config {
+    bucket          = aws_s3_bucket.cf_logs.bucket_domain_name
+    prefix          = "yyyy/MM/dd/"
+    include_cookies = false
+  }
+
+
 
   default_cache_behavior {
     target_origin_id       = local.cf_origin_id
@@ -313,3 +322,51 @@ resource "aws_route53_record" "cf_alias" {
     evaluate_target_health = false
   }
 }
+
+resource "aws_s3_bucket" "cf_logs" {
+  bucket        = "${var.bucket_name_prefix}-cf-logs"
+  force_destroy = true
+  tags = {
+    Project = var.bucket_name_prefix
+    Purpose = "cloudfront-logs"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "cf_logs" {
+  bucket = aws_s3_bucket.cf_logs.id
+  rule { object_ownership = "BucketOwnerPreferred" }
+}
+
+resource "aws_s3_bucket_acl" "cf_logs_acl" {
+  bucket     = aws_s3_bucket.cf_logs.id
+  acl        = "log-delivery-write"
+  depends_on = [aws_s3_bucket_ownership_controls.cf_logs]
+}
+
+data "aws_iam_policy_document" "cf_log_write" {
+  statement {
+    sid    = "AWSLogDeliveryWrite"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["delivery.logs.amazonaws.com"]
+    }
+
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.cf_logs.arn}/*"]
+
+    # LogDelivery は必ずこの ACL を付与
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "cf_logs" {
+  bucket = aws_s3_bucket.cf_logs.id
+  policy = data.aws_iam_policy_document.cf_log_write.json
+}
+
