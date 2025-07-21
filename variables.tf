@@ -30,11 +30,14 @@ variable "repo" {
 }
 
 variable "basic_auth_username" {
-  type      = string
-  sensitive = true
+  description = "Basic Auth username"
+  type        = string
+  sensitive   = true
 }
 
 variable "basic_auth_password" {
-  type      = string
-  sensitive = true
+  description = "Basic Auth password"
+  type        = string
+  sensitive   = true
 }
+
