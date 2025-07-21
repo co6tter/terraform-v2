@@ -2,7 +2,7 @@ function handler(event) {
   var req     = event.request;
   var headers = req.headers;
 
-  var valid = "${TOKEN}";
+  var valid = "${token}";
 
   var auth = headers.authorization && headers.authorization.value;
 
