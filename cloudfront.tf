@@ -29,7 +29,7 @@ resource "aws_cloudfront_function" "basic_auth" {
 
   code = templatefile(
     "${path.module}/templates/basic_auth.js.tftpl",
-    { TOKEN = local.basic_auth_token }
+    { token = local.basic_auth_token }
   )
 }
 
