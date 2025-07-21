@@ -17,7 +17,7 @@ resource "aws_cloudfront_function" "security_headers" {
   publish = true
 
   code = templatefile(
-    "${path.module}/functions/security_headers.js.tftpl",
+    "${path.module}/templates/security_headers.js.tftpl",
     {} # 置換パラメータなし
   )
 }
@@ -28,7 +28,7 @@ resource "aws_cloudfront_function" "basic_auth" {
   publish = true
 
   code = templatefile(
-    "${path.module}/functions/basic_auth.js.tftpl",
+    "${path.module}/templates/basic_auth.js.tftpl",
     { TOKEN = local.basic_auth_token }
   )
 }
