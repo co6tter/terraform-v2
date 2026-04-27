@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "tfstate" {
-  bucket = "c2-terraform-state-prod"
+  bucket = var.bucket_name
   lifecycle {
     prevent_destroy = true
   }
